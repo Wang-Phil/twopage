@@ -2,12 +2,15 @@ from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButt
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 
+from ApiKeyConfigPage import ApiKeyConfigPage
+from Config import Config
+
+
 class SettingsPage(QWidget):
     def __init__(self, parent=None):
         super(SettingsPage, self).__init__(parent)
-
-        self.setWindowTitle("设置")
         self.resize(500, 350)
+        self.setWindowFlags(Qt.FramelessWindowHint)
 
         # Main layout
         main_layout = QVBoxLayout(self)
@@ -15,6 +18,15 @@ class SettingsPage(QWidget):
         # Top bar with title and close button
         top_bar = self.create_top_bar()
         main_layout.addLayout(top_bar)
+
+        # 初始化服务状态字典
+        self.services_status = {
+            "百炼-问答绘图服务": "待添加",
+            "通义听悟·会议纪要服务": "待添加"
+        }
+
+        # 检查并更新服务状态
+        self.check_and_update_services_status()
 
         # AI model configuration section
         ai_model_section = self.create_ai_model_section()
@@ -56,6 +68,8 @@ class SettingsPage(QWidget):
         header_layout = QHBoxLayout()
         ai_model_label = QLabel("AI大模型")
         configure_button = QPushButton("配置")
+        # 添加按钮的点击事件
+        configure_button.clicked.connect(self.openApiKeyConfigPage)
         configure_button.setStyleSheet("background-color: lightgray; font-weight: bold;")
         configure_button.setFixedWidth(60)
 
@@ -78,13 +92,9 @@ class SettingsPage(QWidget):
         services_layout = QVBoxLayout(services_box)
         services_layout.setSpacing(10)
 
-        # Service items
-        services = [
-            ("百炼-问答绘图服务", "已添加", "green"),
-            ("通义听悟·会议纪要服务", "待添加", "red")
-        ]
 
-        for service, status, color in services:
+        for service, status in self.services_status.items():
+            color = "green" if status == "已添加" else "red"
             service_item_layout = QHBoxLayout()
             service_label = QLabel(service)
             status_label = QLabel(status)
@@ -107,10 +117,24 @@ class SettingsPage(QWidget):
         # Model strategy button
         strategy_button = QPushButton("获取模型攻略")
         strategy_button.setStyleSheet(
-            "background-color: yellow; font-weight: bold; padding: 8px; margin-top: 10px;"
+            "background-color: #FFCC33; font-weight: bold; padding: 8px; margin-top: 10px;"
         )
         return strategy_button
 
+    def openApiKeyConfigPage(self):
+        # 创建并显示 APIKeyConfigPage 窗口
+        self.apiKeyConfigPage = ApiKeyConfigPage()
+        self.apiKeyConfigPage.show()
+        self.hide()
+
+    def check_and_update_services_status(self):
+        # 检查百炼-问答绘图服务的API Key是否已配置
+        if Config.get_api_key():
+            self.services_status["百炼-问答绘图服务"] = "已添加"
+
+        # 检查通义听悟·会议纪要服务的App Key是否已配置
+        if Config.get_app_key():
+            self.services_status["通义听悟·会议纪要服务"] = "已添加"
 
 # Run the application
 if __name__ == "__main__":
