@@ -1,23 +1,150 @@
-from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor
+from PyQt5 import QtCore
+from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QFrame, QDesktopWidget, \
+    QGraphicsBlurEffect, QGraphicsDropShadowEffect
+from PyQt5.QtCore import Qt, QSize, QRectF, pyqtSignal
+from PyQt5.QtGui import QIcon, QPainter, QPainterPath, QRegion, QTransform, QPalette, QColor, QLinearGradient, QPen
 
-from ApiKeyConfigPage import ApiKeyConfigPage
+from ApikeyConfigPage import ApiKeyConfigPage
 from Config import Config
 
 
 class SettingsPage(QWidget):
+    # 定义关闭信号
+    closed = pyqtSignal()
     def __init__(self, parent=None):
         super(SettingsPage, self).__init__(parent)
-        self.resize(500, 350)
-        self.setWindowFlags(Qt.FramelessWindowHint)
+        layout = QVBoxLayout(self)  # 包含顶栏和主要内容
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog | Qt.WindowStaysOnTopHint) #Qt.Dialog主要用于在任务栏隐藏图标
+        self.resize(450, 350)
+        
+        # 背景透明
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        
+        # 顶部栏
+        top_bar = self.create_top_bar()
+        layout.addWidget(top_bar)
+        
+        #主要内容
+        self.setting_main_window =  SettingsMainWindow()
+        layout.addWidget(self.setting_main_window)
+        
+        # 添加按钮的点击事件
+        self.setting_main_window.configure_button.clicked.connect(self.openApiKeyConfigPage)
+        
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+    def openApiKeyConfigPage(self):
+        # 创建并显示 APIKeyConfigPage 窗口
+        self.apiKeyConfigPage = ApiKeyConfigPage()
+        self.hide()
+        self.apiKeyConfigPage.show()
+        # 将窗口置顶
+        self.apiKeyConfigPage.raise_()
+        # self.hide()
+           
+    def create_top_bar(self):
+        setting_page_title = BoxTitle(self)
 
-        # Main layout
+        #创建顶部栏
+        top_bar_layout = QHBoxLayout()
+
+        title_label = QLabel("设置")
+        title_label.setStyleSheet("font-size: 16px; color: black;")
+
+        close_btn = QPushButton()
+        close_btn.setFixedSize(24, 24)
+        close_btn.setStyleSheet(
+            '''
+            QPushButton{background-color:transparent;border:none;color:white;}
+            '''
+        )
+
+        close_btn.setIcon(QIcon('./data/close.png'))
+        close_btn.setIconSize(QSize(24, 24));
+        close_btn.clicked.connect(self.close)
+        close_btn.setFixedSize(24, 24)
+
+        top_bar_layout.addWidget(title_label)
+        top_bar_layout.addStretch(1)
+        top_bar_layout.addWidget(close_btn)
+
+        setting_page_title.setLayout(top_bar_layout) 
+        
+        return setting_page_title
+    
+    
+    def move_to_center(self):
+        #移动到窗口中心位置
+        # 获取屏幕总数和屏幕几何数据
+        desktop = QDesktopWidget()
+        screen_count = desktop.screenCount()
+        if screen_count > 1:
+            # 多屏情况下，用第一个屏幕
+            target_screen_index = 0
+            # 获取目标屏幕的几何信息
+            target_screen_geometry = desktop.screenGeometry(target_screen_index)
+        else:
+            # 单屏情况下使用默认屏幕
+            target_screen_geometry = desktop.screenGeometry()
+
+        # 计算窗口移动位置到屏幕右下角
+        right = target_screen_geometry.right()
+        bottom = target_screen_geometry.bottom()
+        self.move(right/2 - self.width()/2, bottom/2 - self.height()/2)
+        
+    #鼠标移动，拖拽窗口实现
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.moving = True
+            self.offset = event.pos()
+
+    def mouseMoveEvent(self, event):
+        if(self.moving):
+            self.move(event.globalPos() - self.offset)
+
+    def mouseReleaseEvent(self, event):
+        if(event.button() == Qt.LeftButton):
+            self.moving = False
+
+    def paintEvent(self, event):
+        #画圆角
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)  # 设置抗锯齿，让圆角更加平滑
+        self.setAttribute(Qt.WA_TranslucentBackground, False)
+        painter.setPen(QColor(0, 0, 0, 10))  # 黑色，透明度设置为10
+        painter.setBrush(self.palette().window().color())#设置画刷为窗口背景颜色
+        radius = 15 #设置圆角半径
+
+        bounds = self.rect()  # 获取窗口的边界
+        # 绘制阴影
+        shadow = QLinearGradient(bounds.topLeft(), bounds.bottomLeft())
+        shadow.setColorAt(0, QColor(100, 100, 100, 50))
+
+        # 设置阴影的模糊半径
+        painter.setPen(QPen(shadow, 1))
+        painter.drawRoundedRect(self.rect(), radius, radius)
+    
+    def closeEvent(self, event):
+        # 重写关闭事件，以便在关闭时通知父窗口
+        self.closed.emit()
+        super().closeEvent(event)
+
+
+class SettingsMainWindow(QWidget):
+    # 定义关闭信号
+    closed = pyqtSignal()
+    def __init__(self, parent=None):
+        super(SettingsMainWindow, self).__init__(parent)
+        self.moving = False
         main_layout = QVBoxLayout(self)
 
-        # Top bar with title and close button
-        top_bar = self.create_top_bar()
-        main_layout.addLayout(top_bar)
+        #实现圆角
+        self.setObjectName('mainwindow')
+        self.radius = 10
+
+        # 背景透明
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
 
         # 初始化服务状态字典
         self.services_status = {
@@ -25,107 +152,85 @@ class SettingsPage(QWidget):
             "通义听悟·会议纪要服务": "待添加"
         }
 
-        # 检查并更新服务状态
+        # 检查并更新服务状态并创建对应模块
         self.check_and_update_services_status()
-
-        # AI model configuration section
         ai_model_section = self.create_ai_model_section()
         main_layout.addLayout(ai_model_section)
 
-        # Model Strategy Button
+        #获取模型攻略按钮
         model_strategy_button = self.create_model_strategy_button()
         main_layout.addWidget(model_strategy_button)
 
-    def create_top_bar(self):
-        # Top bar layout
-        top_bar_layout = QHBoxLayout()
-
-        # Title label
-        title_label = QLabel("设置")
-        title_label.setStyleSheet("font-size: 18px; color: black; font-weight: bold;")
-
-        # Close button
-        close_button = QPushButton("关闭")
-        close_button.setStyleSheet(
-            "QPushButton { border: none; background-color: transparent; color: red; }"
-        )
-        close_button.clicked.connect(self.close)
-
-        # Add widgets to the layout
-        top_bar_layout.addWidget(title_label)
-        top_bar_layout.addStretch(1)
-        top_bar_layout.addWidget(close_button)
-
-        return top_bar_layout
-
     def create_ai_model_section(self):
-        # AI model section layout
+        #ai大模型以及配置按钮
         ai_model_layout = QVBoxLayout()
-        ai_model_layout.setSpacing(10)
+        # ai_model_layout.setSpacing(10)
         ai_model_layout.setContentsMargins(10, 10, 10, 10)
 
-        # AI model header
         header_layout = QHBoxLayout()
         ai_model_label = QLabel("AI大模型")
-        configure_button = QPushButton("配置")
-        # 添加按钮的点击事件
-        configure_button.clicked.connect(self.openApiKeyConfigPage)
-        configure_button.setStyleSheet("background-color: lightgray; font-weight: bold;")
-        configure_button.setFixedWidth(60)
+        ai_model_label.setStyleSheet("font-size: 16px; color: black;")
+        self.configure_button = QPushButton("配置")
+
+        self.configure_button.setStyleSheet("font-size: 16px;color: #2e8ff4;font-weight: bold;border: none;")
+        self.configure_button.setFixedWidth(60)
 
         header_layout.addWidget(ai_model_label)
         header_layout.addStretch(1)
-        header_layout.addWidget(configure_button)
+        header_layout.addWidget(self.configure_button)
+        header_layout.setContentsMargins(20,20,0,0)
 
-        # Add header layout to AI model layout
         ai_model_layout.addLayout(header_layout)
 
-        # Service statuses
         services_box = self.create_services_box()
         ai_model_layout.addWidget(services_box)
 
         return ai_model_layout
 
     def create_services_box(self):
-        # Services box layout
+        #每个AI模型配置对应布局
         services_box = QWidget()
         services_layout = QVBoxLayout(services_box)
         services_layout.setSpacing(10)
 
-
         for service, status in self.services_status.items():
-            color = "green" if status == "已添加" else "red"
             service_item_layout = QHBoxLayout()
             service_label = QLabel(service)
+            service_label.setStyleSheet(f"font-size: 14px;color: black; border:none;")
             status_label = QLabel(status)
-            status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
+            status_label.setStyleSheet(f"font-size: 14px;color: #a4a4a4; border:none; font-weight:bold;")
             service_item_layout.addWidget(service_label)
             service_item_layout.addStretch(1)
             service_item_layout.addWidget(status_label)
-
-            # Add service item layout to services layout
             services_layout.addLayout(service_item_layout)
 
-        # Style for services box
+        # 外面大框样式
         services_box.setStyleSheet(
-            "QWidget { border: 1px solid lightgray; border-radius: 8px; padding: 10px; }"
+            "QWidget { border: 1px solid lightgray; border-radius: 8px; padding: 5px; }"
         )
-
         return services_box
 
     def create_model_strategy_button(self):
-        # Model strategy button
-        strategy_button = QPushButton("获取模型攻略")
-        strategy_button.setStyleSheet(
-            "background-color: #FFCC33; font-weight: bold; padding: 8px; margin-top: 10px;"
-        )
-        return strategy_button
+        # 获取模型攻略按钮
+        bottom_widget = QWidget()
+        bottom_layout = QHBoxLayout(bottom_widget)
 
-    def openApiKeyConfigPage(self):
-        # 创建并显示 APIKeyConfigPage 窗口
-        self.apiKeyConfigPage = ApiKeyConfigPage()
-        self.apiKeyConfigPage.show()
-        self.hide()
+
+        guide_button = QPushButton()
+        guide_button.setIcon(QIcon('./data/icon_strategy.png'))
+        guide_button.setIconSize(QSize(24, 24))
+        guide_button.setText("获取模型攻略")
+        guide_button.setStyleSheet(
+            "color: #2e8ff4; font-size: 16px; border:none;"
+        )
+        guide_button.setFixedSize(guide_button.sizeHint())
+        bottom_layout.setContentsMargins(30, 0, 0, 130)
+
+        bottom_layout.addWidget(guide_button)
+        bottom_layout.addStretch(1)  # 将按钮放在布局的左侧
+        return bottom_widget
+
+    
 
     def check_and_update_services_status(self):
         # 检查百炼-问答绘图服务的API Key是否已配置
@@ -136,12 +241,33 @@ class SettingsPage(QWidget):
         if Config.get_app_key():
             self.services_status["通义听悟·会议纪要服务"] = "已添加"
 
-# Run the application
-if __name__ == "__main__":
-    import sys
-    from PyQt5.QtWidgets import QApplication
+    
 
-    app = QApplication(sys.argv)
-    settings_page = SettingsPage()
-    settings_page.show()
-    sys.exit(app.exec_())
+class BoxTitle(QWidget):
+    def __init__(self, *args, **kwargs):
+        super(BoxTitle, self).__init__()
+        self.setAttribute(Qt.WA_StyledBackground)
+        self.setObjectName('box_title')
+        self.setStyleSheet(
+                '''
+                #box_title{
+                    border-left: 2px solid transparent;
+                    border-top-left-radius: 15px;
+                    border-top-right-radius: 15px;
+                    background-color: white;
+                    background-clip: padding-box; 
+                }
+                '''
+            )
+        self.installEventFilter(self)
+        self.setFixedHeight(36)
+        
+        
+
+# if __name__ == "__main__":
+#     import sys
+#     from PyQt5.QtWidgets import QApplication
+#     app = QApplication(sys.argv)
+#     settings_page = SettingsPage()
+#     settings_page.show()
+#     sys.exit(app.exec_())
